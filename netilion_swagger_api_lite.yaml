@@ -1,0 +1,379 @@
+---
+swagger: '2.0'
+info:
+  title: Netilion API Documentation Lite
+  description: |
+    Welcome to the Netilion API Documentation, which provides interactive access and documentation to our REST API.
+    Please visit our developer portal for further instructions and information: https://developer.netilion.endress.com/
+  version: 01.00.00
+basePath: "/v1"
+consumes:
+- application/json
+produces:
+- application/json
+securityDefinitions:
+  Authentication:
+    type: basic
+    description: Basic authentication with a valid user and password.
+  API-Key:
+    type: apiKey
+    in: header
+    name: API-Key
+    description: The API-Key serves as identifier for the application that connects
+      to the API.
+security:
+- API-Key: []
+  Authentication: []
+paths:
+  "/units":
+    get:
+      summary: Get a range of units.
+      operationId: getUnits
+      description: 'Returns a list of all units that are available in your scope.
+        You can apply query parameters in the request to get a filtered list. If the
+        query has no matches, the response will show an empty array.'
+      parameters:
+      - "$ref": "#/parameters/CodeFilter"
+      - "$ref": "#/parameters/AcceptLanguageHeader"
+      responses:
+        '200':
+          description: The request was successful.
+          schema:
+            "$ref": "#/definitions/UnitsResponse"
+        '400':
+          "$ref": "#/responses/400"
+        '401':
+          "$ref": "#/responses/401"
+        '404':
+          "$ref": "#/responses/404"
+        '429':
+          "$ref": "#/responses/429"
+        '500':
+          "$ref": "#/responses/500"
+      tags:
+      - Unit
+  "/assets/{asset_id}/values":
+    post:
+      summary: Create asset values
+      operationId: createAssetValues
+      description: |-
+        Store values measured by an asset. For performance reasons, this endpoint behaves somewhat differently than normal endpoints:
+
+        * The data passed to this endpoint is processed asynchronously.
+        * This endpoint always returns an empty response with status 204 No Content.
+        * The data will be validated during processing. Invalid data will be dropped silently.
+        * The request size is limited to 500kb, requests larger then 500kb will get an "413 Payload Too Large" error.
+
+        Data validations and manipulation:
+
+          * Keys and groups can only consist of the characters [a-z A-Z 0-9 . - _ ].
+          * Keys and groups will be converted to lower case strings.
+          * Keys and groups must be between 1 and 128 characters long.
+          * Units can be passed as id or code. See the units endpoint for all available units.
+          * The timestamp is not mandatory and will be set to the time the value was transmitted to the server (This only works if the values get transferred one at a time, if you send multiple values without timestamp at once, all values will get the same timestamp and there for only the last one will be stored)
+      parameters:
+      - "$ref": "#/parameters/AssetPathID"
+      - name: Body
+        in: body
+        description: Values to store to an asset.
+        required: true
+        schema:
+          "$ref": "#/definitions/AssetValuesRequest"
+      responses:
+        '204':
+          "$ref": "#/responses/204"
+        '400':
+          "$ref": "#/responses/400"
+        '401':
+          "$ref": "#/responses/401"
+        '403':
+          "$ref": "#/responses/403"
+        '404':
+          "$ref": "#/responses/404"
+        '409':
+          "$ref": "#/responses/409"
+        '413':
+          "$ref": "#/responses/413"
+        '429':
+          "$ref": "#/responses/429"
+        '500':
+          "$ref": "#/responses/500"
+      tags:
+      - Values
+definitions:
+  AssetValueRequest:
+    properties:
+      key:
+        type: string
+      unit:
+        "$ref": "#/definitions/Nested_ID_code"
+      group:
+        type: string
+      data:
+        type: array
+        title: data
+        items:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: dateTime
+            value:
+              type: number
+            status:
+              type: string
+              description: Possible values are good, uncertain, bad.
+            simulated:
+              type: boolean
+            hold:
+              type: boolean
+          required:
+          - value
+    required:
+    - key
+    - unit
+    - values
+  AssetValuesRequest:
+    properties:
+      values:
+        type: array
+        items:
+          "$ref": "#/definitions/AssetValueRequest"
+  Nested_ID_code:
+    type: object
+    required:
+    - id
+    - code
+    properties:
+      id:
+        type: integer
+        format: int64
+        description: ID of the nested resources
+      code:
+        type: string
+        description: code of the nested resource
+  Nested_ID_href:
+    type: object
+    required:
+    - id
+    - href
+    properties:
+      id:
+        type: integer
+        format: int64
+        description: ID of the nested resources
+      href:
+        type: string
+        description: href to the nested resource
+  Pagination:
+    type: object
+    required:
+    - total_count
+    - page_count
+    - per_page
+    - page
+    properties:
+      total_count:
+        type: integer
+        description: items in the result
+      page_count:
+        type: integer
+        description: number of pages
+      per_page:
+        type: integer
+        description: items per page
+        minimum: 1
+        maximum: 100
+      page:
+        type: integer
+        description: current page
+      prev:
+        type: string
+        description: The link for the immediate previous page of results.
+      next:
+        type: string
+        description: The link for the immediate next page of results.
+      first:
+        type: string
+        description: The link for the first page of results.
+      last:
+        type: string
+        description: The link for the last page of results.
+  UnitBase:
+    discriminator: unitBaseType
+    required:
+    - name
+    - code
+    properties:
+      code:
+        type: string
+        description: The value must be unique. Whitespaces are trimmed.
+      symbol:
+        type: string
+        description: Symbol of the unit.
+      name:
+        type: string
+        description: Supports translations. Whitespaces are trimmed.
+      description:
+        type: string
+        description: Supports translations.
+  UnitResponse:
+    required:
+    - id
+    - name
+    allOf:
+    - "$ref": "#/definitions/UnitBase"
+    - type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Id of object
+        base_unit:
+          "$ref": "#/definitions/Nested_ID_href"
+  UnitsResponse:
+    type: object
+    properties:
+      units:
+        type: array
+        items:
+          "$ref": "#/definitions/UnitResponse"
+      pagination:
+        "$ref": "#/definitions/Pagination"
+  Error:
+    required:
+    - type
+    - message
+    properties:
+      type:
+        type: string
+        description: |-
+          The type of the error that occurred. Possible types are
+          * access_denied - access to the required resource denied
+          * api_lockout - action would lead to an api lockout
+          * assigned - resources has assigned resource
+          * assigned_restriction - resource can't be deleted because of dependents
+          * association_blank - mandatory association was blank
+          * association_not_found - invalid reference used for relation field
+          * association_tenant_conflict - tenant association mismatch
+          * association_conflict - association mismatch
+          * associations_already_added - duplicate association
+          * associations_not_found - invalid references used for relation field
+          * blank - mandatory field was not set
+          * boolean_format - value is not a boolean
+          * date_format - invalid date format for field
+          * date_range - invalid date range
+          * date_time_format - invalid date time format for field
+          * date_year_month_format - invalid date/year month/year format
+          * greater_than - value to high for numeric field
+          * id_format - invalid format of an ID field
+          * internal_server_error - unexpected error on server
+          * invalid - format not allowed
+          * invalid_input - invalid input data caused an error
+          * invalid_enum_value - the given value is not a valid enum value
+          * key_format - invalid key format
+          * lockout - action would lead to a resource lockout
+          * less_than - value to low for numeric field
+          * missing_header - a mandatory request header is missing
+          * missing_parameter - a mandatory request parameter is missing
+          * not_a_number - for numerical fields
+          * not_unique_in_scope - resource not unique in corresponding scope
+          * number_format - wrong input for number
+          * parameter_missing - required parameter for resource is missing
+          * parent - resource can not be deleted cause its a parent to other resources
+          * present - field that should not be set
+          * quota_exceeded - file, image or asset could not be created because the subscription quota has exceeded
+          * service_unavailable - service is currently not available
+          * specification_not_found - specification for given key not found
+          * specifications_not_found - specifications for given keys not found
+          * taken - unique field is already taken
+          * tenant_on_child - tenant parent/child conflict
+          * too_long - length not in valid range
+          * too_short - length not in valid range
+          * unconfirmed - user is unconfirmed
+          * wrong_format - invalid date format for field
+          * wrong_length - does not match exact length
+      message:
+        type: string
+        description: readable message about the error
+      attribute:
+        type: string
+        description: the attribute on which the error occurred. This could be used
+          to figure out which field was invalid. Is also set for relation attributes
+          with faulty references
+  ErrorResponse:
+    properties:
+      errors:
+        type: array
+        items:
+          "$ref": "#/definitions/Error"
+parameters:
+  AcceptLanguageHeader:
+    name: Accept-Language
+    in: header
+    description: The client's accepted languages. One or several (e.g. fr,de,en)
+    type: string
+    required: false
+  CodeFilter:
+    name: code
+    in: query
+    description: Filter accepts `*` as wildcard
+    type: string
+    required: false
+  AssetPathID:
+    name: asset_id
+    in: path
+    description: The resource defined in the URL
+    type: integer
+    format: int64
+    required: true
+  
+responses:
+  '204':
+    description: The request was successful, and the response body is empty.
+  '400':
+    description: Bad request. The data given in the request failed validation, or
+      the authorization was missing. Please inspect the response body for details
+      on the error.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
+  '401':
+    description: Unauthorized request. API-Key or authorization were invalid.
+  '402':
+    description: Quota is exceeded. Cant upload anymore files or create any more assets.
+      In case of storage exceeded, contains the MB how much its exceeded in the message.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
+  '403':
+    description: It is forbidden to create, delete or update an object. Please inspect
+      the response body for details on the error.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
+  '404':
+    description: The resource or the specified URL could not be found or the requesting
+      user has no permission.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
+  '409':
+    description: Failed to create, update or delete a resource because of a conflict
+      with an existing resource or due to existing assignments on the resource. Please
+      inspect the response body for details on the error.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
+  '413':
+    description: Request entity too large. The send request exceeded the maximum allowed
+      request size for this endpoint.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
+  '429':
+    description: Too many request. Overload protection has been enabled.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
+  '500':
+    description: Internal server error. The request failed. Please try again.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
+  '503':
+    description: Service currently not available. Please try again later.
+    schema:
+      "$ref": "#/definitions/ErrorResponse"
